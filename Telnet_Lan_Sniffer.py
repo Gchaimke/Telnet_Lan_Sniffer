@@ -1,3 +1,4 @@
+# Rename settings_template.json to settings.json, and setup your network and user names 
 import ipaddress
 import json
 from multiprocessing import Pool,Process
