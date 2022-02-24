@@ -1,0 +1,17 @@
+{
+    "range": "192.168.0.0/20",
+    "stop_ip": "192.168.1.250",
+    "port": "23",
+    "timout": "100",
+    "threads": 20,
+    "users": [
+        {
+            "name": "admin",
+            "pass": "12345"
+        },
+        {
+            "name": "Admin",
+            "pass": "0000"
+        }
+    ]
+}
