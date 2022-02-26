@@ -1,10 +1,13 @@
-# Rename settings_template.json to settings.json, and setup your network and user names 
+# Rename settings_template.json to settings.json, and setup your network and user names
+from distutils import command
 import ipaddress
 import json
-from multiprocessing import Pool,Process
+from multiprocessing import Pool, Process
 import re
 import subprocess
 import telnetlib
+from weakref import proxy
+import paramiko
 import numpy
 
 
@@ -44,24 +47,67 @@ class LanSnif:
 
         pass
 
-    def start_telnet_for_ip(self,ip):
+    def start_telnet_for_ip(self, ip):
         port = settings["port"]
         timeout = settings["timeout"]
         users = settings["users"]
+        commands = settings["run_commands"]
         try:
+            print(f"processing ip {ip}")
             with telnetlib.Telnet(str(ip), int(port), float(timeout)) as session:
-                session.read_until(b"login: ")
+                session.set_debuglevel(0)
+                session.expect([b"login", b"Login"], 10)
                 for user in users:
                     print(
                         f"try login with user {user['name']} and password {user['pass']}")
-                    session.write(b"%s\n" % user['name'])
-                    session.read_until(b"password: ")
-                    session.write(b"%s\n" % user['pass'])
-                    print(session.read_all().decode('ascii'))
+                    session.write(user['name'].encode("ascii")+b"\n")
+                    print(f"enter user: {user['name']}")
+                    session.expect([b"password", b"Password"], 10)
+                    print(f"enter password: {user['pass']}")
+                    session.write(user['pass'].encode("ascii") + b"\n")
+                    err, obj,data = session.expect([b"Login incorrect"], 10)
+                    if(err==0):
+                        continue
+
+                    for command in commands:
+                        session.write(command.encode("ascii") + b"\n")
+                    session.write(b"exit\n")
+                    session_read_data  = session.read_all().decode('ascii')
+                    save_file = open(f"output/{ip}.conf", "w")
+                    save_file.write(session_read_data)
+                    save_file.close()
+                    print(session_read_data)
+                    break
                 print(f"end processing ip {ip}")
         except Exception as ex:
             print(f"{ip} {ex}")
+        pass
 
+    def start_ssh_for(self, ip):
+        users = settings["users"]
+        client = paramiko.SSHClient()
+        client.load_system_host_keys()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        for user in users:
+            print(
+                f"try login with user {user['name']} and password {user['pass']}")
+            try:
+                client.connect(
+                    ip, username=user['name'], password=user['pass'])
+                stdin, stdout, stderr = client.exec_command('ifconfig')
+                save_file = open(f"output/{ip}.conf", "w")
+                save_file.write(stdout.read().decode("utf8"))
+                save_file.close()
+                print(f'STDOUT: {stdout.read().decode("utf8")}')
+
+                stdin.close()
+                stdout.close()
+                stderr.close()
+                client.close()
+                break
+            except Exception as ex:
+                client.close()
+                print(ex)
         pass
 
     def run_in_process(self):
@@ -82,4 +128,6 @@ class LanSnif:
 if __name__ == '__main__':
     app = LanSnif()
     # app.run_in_process()
-    app.run_in_pool()
+    # app.run_in_pool()
+    app.start_telnet_for_ip("192.168.1.15")
+    # app.start_ssh_for("192.168.1.15")
