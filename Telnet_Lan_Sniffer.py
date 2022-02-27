@@ -129,5 +129,7 @@ if __name__ == '__main__':
     app = LanSnif()
     # app.run_in_process()
     # app.run_in_pool()
-    app.start_telnet_for_ip("192.168.1.15")
+    ip = "10.72.142.254"
+    app.start_telnet_for_ip(ip)
+    app.start_ssh_for(ip)
     # app.start_ssh_for("192.168.1.15")
