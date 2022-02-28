@@ -4,6 +4,7 @@
     "port": "23",
     "timeout": "100",
     "threads": 20,
+    "run_commands":["ls","ifconfig"],
     "users": [
         {
             "name": "admin",
