@@ -31,28 +31,32 @@ menu3 = """
 
 def start_cli(**kwargs):
 
-    if len(kwargs) > 0:
-        protocol = kwargs.get("protocol", "SSH")
-        ping = kwargs.get("ping", True)
-        source_ip = kwargs.get("source_ip", True)
-    else:
-        print(header)
+    protocol = kwargs.get("protocol", "")
+    ping = kwargs.get("ping", "")
+    source_ip = kwargs.get("source_ip", "")
+
+    clearConsole()
+    if protocol == "":
         protocol = "Telnet" if input(menu1) == "1" else "SSH"
         clearConsole()
+    if ping == "":
         ping = True if input(menu2) == "1" else False
         clearConsole()
+
+    if source_ip == "":
         if input(menu3) == "1":
             source_ip = True
         else:
             source_ip = input(
                 "input your ip like 192.168.1.1 or range like 192.168.0.0/24\n\n")
         clearConsole()
-        input(f"protocol = {protocol}\n ping = {ping}\n source_ip = {source_ip} \n\n press Enter to start \n")
-    telnet = TS_client(protocol=protocol, ping=ping, source_ip=source_ip)
+    input(
+        f"\tprotocol = {protocol}\n\tping = {ping}\n\tsource_ip = {source_ip} \n\n press Enter to start \n")
+    client = TS_client(protocol=protocol, ping=ping, source_ip=source_ip,telnet_debug=True)
 
     clearConsole()
-    print(telnet.run_in_pool())
-    pass
+    client.run_in_pool()
+    return
 
 
 def clearConsole():
@@ -63,8 +67,6 @@ def clearConsole():
     print(header)
 
 
-telnet = TS_client(protocol="Telnet", ping=True, source_ip=True)
-ips = list(ipaddress.IPv4Network(settings["range"]))
-telnet.check_range(ips)
-
-# start_cli(protocol="SSH", ping=True, source_ip=True)
+if __name__ == '__main__':
+    start_cli()
+    # start_cli(protocol="SSH", ping=True, source_ip=True)

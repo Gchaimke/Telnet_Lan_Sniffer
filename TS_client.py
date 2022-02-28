@@ -2,16 +2,40 @@
 import ipaddress
 import json
 from multiprocessing import Pool, Process
+from os import path
 import re
 import subprocess
 import telnetlib
 import paramiko
 import numpy
 
+settings_path = r"settings.json"
+if not path.exists(settings_path):
+    with open(settings_path, "w+") as settings_data:
+        settings_data.write("""
+{
+    "range": "192.168.0.0/20",
+    "stop_ip": "192.168.1.250",
+    "port": "23",
+    "timeout": "100",
+    "threads": 20,
+    "run_commands":["ls","ifconfig"],
+    "users": [
+        {
+            "name": "admin",
+            "pass": "12345"
+        },
+        {
+            "name": "Admin",
+            "pass": "0000"
+        }
+    ]
+}
+        """)
 
-settings_path = open(r"settings.json", "r")
-settings = json.load(settings_path)
-settings_path.close()
+settings_data = open(settings_path, "r")
+settings = json.load(settings_data)
+settings_data.close()
 re_ping_ok = re.compile(r"from \d+.\d+.\d+.\d+: bytes=\d+ time=\d+ms TTL=\d+")
 
 
@@ -20,6 +44,7 @@ class TS_client:
         self.protocol = kwargs.get("protocol", "Telnet")
         self.ping = kwargs.get("ping", True)
         self.source_ip = kwargs.get("source_ip", True)
+        self.telnet_debug = kwargs.get("telnet_debug", False)
 
         if self.source_ip == True:
             self.ip_range = list(ipaddress.IPv4Network(settings["range"]))
@@ -32,6 +57,7 @@ class TS_client:
     def check_range(self, chunk_ips):
         stop_ip = ipaddress.IPv4Address(settings["stop_ip"])
         for ip in chunk_ips:
+            print("_"*16+f"\tstart check {ip}\t"+"_"*16)
             if ip > stop_ip:
                 break
             if self.ping == True:
@@ -53,31 +79,35 @@ class TS_client:
         timeout = settings["timeout"]
         users = settings["users"]
         commands = settings["run_commands"]
+        cmd_timeout = 3
         try:
             with telnetlib.Telnet(str(ip), int(port), float(timeout)) as session:
-                session.set_debuglevel(0)
-                session.expect([b"login", b"Login"], 10)
+                if self.telnet_debug == True:
+                    session.set_debuglevel(1)
+                output_file = open(f"output/{ip}.conf", "w+")
                 for user in users:
                     print(
                         f"Telnet {ip} =>  try login with user {user['name']} and password {user['pass']}")
+                    session.expect([b"login", b"Login"], cmd_timeout)
                     session.write(user['name'].encode("ascii")+b"\n")
                     print(f"enter user: {user['name']}")
-                    session.expect([b"password", b"Password"], 10)
+                    session.expect([b"password", b"Password"], cmd_timeout)
                     print(f"enter password: {user['pass']}")
                     session.write(user['pass'].encode("ascii") + b"\n")
-                    err, obj, data = session.expect([b"Login incorrect"], 10)
-                    if(err == 0):
+                    recv = session.read_until(b"\n$", cmd_timeout).decode('ascii')
+                    output_file.write(recv)
+                    error_keys = ["login","Login"]
+                    if any(word in recv  for word in error_keys):
                         continue
 
                     for command in commands:
                         session.write(command.encode("ascii") + b"\n")
+                        recv = session.read_until(b"\n$", cmd_timeout).decode('ascii')
+                        output_file.write(recv)
+                    session.read_until(b"\n$", cmd_timeout)
                     session.write(b"exit\n")
-                    session_read_data = session.read_all().decode('ascii')
-                    save_file = open(f"output/{ip}.conf", "w")
-                    save_file.write(session_read_data)
-                    save_file.close()
-                    print(session_read_data)
                     break
+                output_file.close()
                 print(f"end processing ip {ip}")
         except Exception as ex:
             print(f"{ip} {ex}")
@@ -87,6 +117,7 @@ class TS_client:
 
     def SSH(self, ip):
         users = settings["users"]
+        commands = settings["run_commands"]
         client = paramiko.SSHClient()
         client.load_system_host_keys()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -95,20 +126,21 @@ class TS_client:
                 f"SSH {ip} => try login with user {user['name']} and password {user['pass']}")
             try:
                 client.connect(
-                    ip, username=user['name'], password=user['pass'])
-                stdin, stdout, stderr = client.exec_command('ifconfig')
-                save_file = open(f"output/{ip}.conf", "w")
-                save_file.write(stdout.read().decode("utf8"))
-                save_file.close()
-                print(f'STDOUT: {stdout.read().decode("utf8")}')
-
+                    str(ip), username=user['name'], password=user['pass'])
+                output_file = open(f"output/{ip}.conf", "w")
+                for command in commands:
+                    stdin, stdout, stderr = client.exec_command(command)
+                    recv  =  stdout.read().decode("utf8")
+                    print(recv)
+                    output_file.write(recv)
+                
                 stdin.close()
                 stdout.close()
                 stderr.close()
                 client.close()
+                output_file.close()
                 break
             except Exception as ex:
-                client.close()
                 print(ex)
         print(f"exit {ip} SSH")
         return
@@ -121,12 +153,14 @@ class TS_client:
 
     def run_in_pool(self):
         p = Pool(settings["threads"])
-        range_chunks = numpy.array_split(self.ip_range, settings["threads"])
+        if(len(self.ip_range) > 1):
+            range_chunks = numpy.array_split(
+                self.ip_range, settings["threads"])
+        else:
+            range_chunks = [self.ip_range]
         with p:
             p.map(self.check_range, range_chunks)
 
 
 if __name__ == '__main__':
     app = TS_client()
-    # ip = "192.168.3.1"
-    # app.run_in_pool()
