@@ -2,7 +2,7 @@
 import ipaddress
 import json
 from multiprocessing import Pool, Process
-from os import path
+from os import path,makedirs
 import re
 import subprocess
 import telnetlib
@@ -32,7 +32,8 @@ if not path.exists(settings_path):
     ]
 }
         """)
-
+if not path.exists("out"):
+  makedirs("out")
 settings_data = open(settings_path, "r")
 settings = json.load(settings_data)
 settings_data.close()
@@ -84,7 +85,7 @@ class TS_client:
             with telnetlib.Telnet(str(ip), int(port), float(timeout)) as session:
                 if self.telnet_debug == True:
                     session.set_debuglevel(1)
-                output_file = open(f"output/{ip}.conf", "w+")
+                output_file = open(f"out/{ip}.conf", "w+")
                 for user in users:
                     print(
                         f"Telnet {ip} =>  try login with user {user['name']} and password {user['pass']}")
@@ -127,7 +128,7 @@ class TS_client:
             try:
                 client.connect(
                     str(ip), username=user['name'], password=user['pass'])
-                output_file = open(f"output/{ip}.conf", "w")
+                output_file = open(f"out/{ip}.conf", "w")
                 for command in commands:
                     stdin, stdout, stderr = client.exec_command(command)
                     recv  =  stdout.read().decode("utf8")
@@ -160,6 +161,10 @@ class TS_client:
             range_chunks = [self.ip_range]
         with p:
             p.map(self.check_range, range_chunks)
+    
+    def run(self):
+        self.check_range(self.ip_range)
+
 
 
 if __name__ == '__main__':

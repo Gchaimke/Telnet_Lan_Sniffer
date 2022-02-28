@@ -1,2 +1,5 @@
+/__pycache__
 /settings.json
-/output/*
+/out
+/output/out
+/output/settings.json

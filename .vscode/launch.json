@@ -8,7 +8,7 @@
             "name": "Python: CLI  ",
             "type": "python",
             "request": "launch",
-            "program": "cli.py",
+            "program": "ts_cli.py",
             "console": "integratedTerminal"
         }
     ]
