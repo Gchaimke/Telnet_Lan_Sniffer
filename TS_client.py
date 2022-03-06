@@ -83,7 +83,7 @@ class TS_client:
         cmd_timeout = 3
         try:
             with telnetlib.Telnet(str(ip), int(port), float(timeout)) as session:
-                if self.telnet_debug == True:
+                if self.telnet_debug == False:
                     session.set_debuglevel(1)
                 output_file = open(f"out/{ip}.conf", "w+")
                 for user in users:
