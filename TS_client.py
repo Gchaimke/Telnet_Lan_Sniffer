@@ -45,7 +45,7 @@ class TS_client:
         self.protocol = kwargs.get("protocol", "Telnet")
         self.ping = kwargs.get("ping", True)
         self.source_ip = kwargs.get("source_ip", True)
-        self.telnet_debug = kwargs.get("telnet_debug", False)
+        self.telnet_debug = kwargs.get("telnet_debug", True)
 
         if self.source_ip == True:
             self.ip_range = list(ipaddress.IPv4Network(settings["range"]))
@@ -83,7 +83,7 @@ class TS_client:
         cmd_timeout = 3
         try:
             with telnetlib.Telnet(str(ip), int(port), float(timeout)) as session:
-                if self.telnet_debug == False:
+                if self.telnet_debug == True:
                     session.set_debuglevel(1)
                 output_file = open(f"out/{ip}.conf", "w+")
                 for user in users:
