@@ -2,7 +2,7 @@
 import ipaddress
 import json
 from multiprocessing import Pool, Process
-from os import path,makedirs
+from os import path, makedirs
 import re
 import subprocess
 import telnetlib
@@ -33,7 +33,7 @@ if not path.exists(settings_path):
 }
         """)
 if not path.exists("out"):
-  makedirs("out")
+    makedirs("out")
 settings_data = open(settings_path, "r")
 settings = json.load(settings_data)
 settings_data.close()
@@ -80,12 +80,12 @@ class TS_client:
         timeout = settings["timeout"]
         users = settings["users"]
         commands = settings["run_commands"]
+        output = ""
         cmd_timeout = 3
         try:
             with telnetlib.Telnet(str(ip), int(port), float(timeout)) as session:
                 if self.telnet_debug == True:
                     session.set_debuglevel(1)
-                output_file = open(f"out/{ip}.conf", "w+")
                 for user in users:
                     print(
                         f"Telnet {ip} =>  try login with user {user['name']} and password {user['pass']}")
@@ -95,21 +95,29 @@ class TS_client:
                     session.expect([b"password", b"Password"], cmd_timeout)
                     print(f"enter password: {user['pass']}")
                     session.write(user['pass'].encode("ascii") + b"\n")
-                    recv = session.read_until(b"\n$", cmd_timeout).decode('ascii')
-                    output_file.write(recv)
-                    error_keys = ["login","Login"]
-                    if any(word in recv  for word in error_keys):
+                    recv = session.read_until(
+                        b"\n$", cmd_timeout).decode('ascii')
+                    output += recv
+                    error_keys = ["login", "Login"]
+                    if any(word in recv for word in error_keys):
                         continue
 
                     for command in commands:
                         session.write(command.encode("ascii") + b"\n")
-                        recv = session.read_until(b"\n$", cmd_timeout).decode('ascii')
-                        output_file.write(recv)
+                        recv = session.read_until(
+                            b"\n$", cmd_timeout).decode('ascii')
+                        output += recv
                     session.read_until(b"\n$", cmd_timeout)
                     session.write(b"exit\n")
                     break
-                output_file.close()
                 print(f"end processing ip {ip}")
+                
+            host_name = self.get_hostname(output)
+            output = self.remove_empty_lines(output)
+
+            output_file = open(f"out/{host_name}_{ip}.conf", "w+")
+            output_file.write(output)
+            output_file.close()
         except Exception as ex:
             print(f"{ip} {ex}")
 
@@ -131,10 +139,10 @@ class TS_client:
                 output_file = open(f"out/{ip}.conf", "w")
                 for command in commands:
                     stdin, stdout, stderr = client.exec_command(command)
-                    recv  =  stdout.read().decode("utf8")
+                    recv = stdout.read().decode("utf8")
                     print(recv)
                     output_file.write(recv)
-                
+
                 stdin.close()
                 stdout.close()
                 stderr.close()
@@ -145,6 +153,22 @@ class TS_client:
                 print(ex)
         print(f"exit {ip} SSH")
         return
+
+    def get_hostname(self, string):
+        regex = re.compile("(.+)->.+", re.MULTILINE)
+        host_name = re.findall(regex, string)
+        if(len(host_name) > 0):
+            return host_name[0]
+        return "hostname_not_found"
+
+    def remove_empty_lines(self, string):
+        new_string = ""
+        data = string.splitlines()
+        for line in data:
+            if line == "":
+                continue
+            new_string += line+"\n"
+        return new_string
 
     def run_in_process(self):
         range_chunks = numpy.array_split(self.ip_range, settings["threads"])
@@ -161,10 +185,9 @@ class TS_client:
             range_chunks = [self.ip_range]
         with p:
             p.map(self.check_range, range_chunks)
-    
+
     def run(self):
         self.check_range(self.ip_range)
-
 
 
 if __name__ == '__main__':
