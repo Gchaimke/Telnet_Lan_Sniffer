@@ -1,4 +1,5 @@
 # Rename settings_template.json to settings.json, and setup your network and user names
+from ast import parse
 import ipaddress
 import json
 from multiprocessing import Pool, Process
@@ -14,12 +15,12 @@ if not path.exists(settings_path):
     with open(settings_path, "w+") as settings_data:
         settings_data.write("""
 {
-    "range": "192.168.0.0/20",
+    "range": "192.168.0.254",
     "stop_ip": "192.168.1.250",
     "port": "23",
     "timeout": "100",
     "threads": 20,
-    "run_commands":["ls","ifconfig"],
+    "run_commands":["get config","show configuration | display set | no-more","show","sh"],
     "users": [
         {
             "name": "admin",
@@ -37,43 +38,66 @@ if not path.exists("out"):
 settings_data = open(settings_path, "r")
 settings = json.load(settings_data)
 settings_data.close()
-re_ping_ok = re.compile(r"from \d+.\d+.\d+.\d+: bytes=\d+ time=\d+ms TTL=\d+")
+re_ping_ok = re.compile(r"Received = (\d+)")
 
 
 class TS_client:
     def __init__(self, **kwargs):
         self.protocol = kwargs.get("protocol", "Telnet")
         self.ping = kwargs.get("ping", True)
-        self.source_ip = kwargs.get("source_ip", True)
+        self.config_file = kwargs.get("config_file", True)
         self.telnet_debug = kwargs.get("telnet_debug", True)
 
-        if self.source_ip == True:
-            self.ip_range = list(ipaddress.IPv4Network(settings["range"]))
+        if self.config_file:
+            self.ip_range = self.get_range(
+                settings["range"], settings["stop_ip"])
         else:
-            self.ip_range = list(ipaddress.IPv4Network(
-                kwargs.get("source_ip", settings["range"])))
-
+            self.source_ip = kwargs.get("source_ip", "192.168.0.253")
+            self.stop_ip = kwargs.get("stop_ip", "192.168.1.255")
+            self.ip_range = self.get_range(self.source_ip, self.stop_ip)
         return
+
+    def get_range(self, source_range: str, stop_ip: str):
+        oct_range = source_range.split(maxsplit=4, sep=".")
+        oct_stop = stop_ip.split(maxsplit=4, sep=".")
+        if len(oct_range) > 3 and len(oct_stop) > 3:
+            ip_range = [f"{a}.{b}.{c}.{d}" for a in range(int(oct_range[0]), int(oct_stop[0])+1, 1)
+                        for b in range(int(oct_range[1]), int(oct_stop[1])+1, 1)
+                        for c in range(int(oct_range[2]), int(oct_stop[2])+1, 1)
+                        for d in range(int(oct_range[3]), int(oct_stop[3])+1, 1)]
+            return ip_range
+        else:
+            return list(source_range)
 
     def check_range(self, chunk_ips):
-        stop_ip = ipaddress.IPv4Address(settings["stop_ip"])
         for ip in chunk_ips:
-            print("_"*16+f"\tstart check {ip}\t"+"_"*16)
-            if ip > stop_ip:
-                break
-            if self.ping == True:
-                response = subprocess.run(
-                    ["ping", str(ip)], capture_output=True)
-                if(len(re.findall(re_ping_ok, str(response))) > 0):
-                    print("#"*16+f"\t {ip}\t is accessble \t\t"+"#"*16)
-                    getattr(self, self.protocol)(ip)
+            print("_"*16+f"\t checking {ip}\t"+"_"*16)
+            try:
+                ip = ipaddress.IPv4Address(ip)
+                if self.ping == True:
+                    is_ping_ok = self.ping_ip(ip)
+                    if is_ping_ok:
+                        getattr(self, self.protocol)(ip)
                 else:
-                    print("="*16+f"\t {ip}\t is not accessble \t"+"="*16)
-            else:
-                getattr(self, self.protocol)(ip)
+                    getattr(self, self.protocol)(ip)
 
-        print(f"exit {ip} check_range")
+            except Exception as ex:
+                print(f"exit {ex}")
+
+        print(f"exit {chunk_ips} check_range")
         return
+
+    def ping_ip(self, ip):
+        response = subprocess.run(f"ping {ip} -n 2", capture_output=True)
+        ping_count = re.findall(re_ping_ok, str(response))
+        if ping_count:
+            ping_count = ping_count[0]
+        if(int(ping_count) > 0):
+            print("#"*16+f"\t {ip}\t is accessble \t\t"+"#"*16)
+            return True
+        else:
+            print("="*16+f"\t {ip}\t is not accessble \t"+"="*16)
+            return False
 
     def Telnet(self, ip):
         port = settings["port"]
@@ -111,7 +135,7 @@ class TS_client:
                     session.write(b"exit\n")
                     break
                 print(f"end processing ip {ip}")
-                
+
             host_name = self.get_hostname(output)
             output = self.remove_empty_lines(output)
 
@@ -155,10 +179,17 @@ class TS_client:
         return
 
     def get_hostname(self, string):
-        regex = re.compile("(.+)->.+", re.MULTILINE)
-        host_name = re.findall(regex, string)
-        if(len(host_name) > 0):
-            return host_name[0]
+        hostname_regex = re.compile(r"set (system )?host\W?name (.+)" , re.MULTILINE)
+        host_name = re.findall(hostname_regex, string)
+
+        if host_name:
+            return host_name[1]
+        else:
+            hostname_regex = re.compile("(.+)->.+", re.MULTILINE)
+            host_name = re.findall(hostname_regex, string)
+            if host_name:
+                return host_name[0]
+
         return "hostname_not_found"
 
     def remove_empty_lines(self, string):
@@ -182,7 +213,7 @@ class TS_client:
             range_chunks = numpy.array_split(
                 self.ip_range, settings["threads"])
         else:
-            range_chunks = [self.ip_range]
+            range_chunks = list(self.ip_range)
         with p:
             p.map(self.check_range, range_chunks)
 
