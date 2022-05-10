@@ -179,26 +179,20 @@ class TS_client:
         return
 
     def get_hostname(self, string):
-        hostname_regex = re.compile(r"set system host-name (.+)" , re.MULTILINE)
+        hostname_regex = re.compile(r"set (system )?host\W?name (.+)" , re.MULTILINE)
         host_name = re.findall(hostname_regex, string)
-        host_name = host_name("\r", "")
 
         if host_name:
-            return host_name[0]
-        else:
-            hostname_regex = re.compile(r"set hostname (.+)" , re.MULTILINE)
-            host_name = re.findall(hostname_regex, string)
-            host_name = host_name("\r", "")
-        if host_name:
-            return host_name[0]
+            host_name = host_name[1].replace("\r","")
+            return host_name
         else:
             hostname_regex = re.compile("(.+)->.+", re.MULTILINE)
             host_name = re.findall(hostname_regex, string)
-            host_name = host_name("\r", "")
-        if host_name:
-            return host_name[0]
-        else:
-            return "hostname_not_found"
+            if host_name:
+                host_name = host_name[0].replace("\r","")
+                return host_name
+
+        return "hostname_not_found"
 
     def remove_empty_lines(self, string):
         new_string = ""
