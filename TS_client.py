@@ -1,9 +1,9 @@
 # Rename settings_template.json to settings.json, and setup your network and user names
-from ast import parse
 import ipaddress
 import json
 from multiprocessing import Pool, Process
 from os import path, makedirs
+from random import randint
 import re
 import subprocess
 import telnetlib
@@ -178,21 +178,23 @@ class TS_client:
         print(f"exit {ip} SSH")
         return
 
-    def get_hostname(self, string):
-        hostname_regex = re.compile(r"set (system )?host\W?name (.+)" , re.MULTILINE)
-        host_name = re.findall(hostname_regex, string)
+    def get_hostname(self, string: str) -> str:
+
+        hostname_regex = re.compile(
+            r"set (system )?host\W?name ([a-zA-Z0-9]*\S*[a-zA-Z0-9]*[^\\rn\s>])", re.MULTILINE)
+        host_name = re.findall(hostname_regex, str(string))
 
         if host_name:
-            host_name = host_name[1].replace("\r","")
-            return host_name
+            host_name = host_name[0][1]
         else:
             hostname_regex = re.compile("(.+)->.+", re.MULTILINE)
             host_name = re.findall(hostname_regex, string)
             if host_name:
-                host_name = host_name[0].replace("\r","")
-                return host_name
+                host_name = host_name[0][0]
+            else:
+                host_name = f"NA_{randint(1,1000)}_"
 
-        return "hostname_not_found"
+        return host_name.replace(".", "").replace("\\r", "").replace("\\", "")
 
     def remove_empty_lines(self, string):
         new_string = ""

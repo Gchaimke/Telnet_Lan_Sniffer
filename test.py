@@ -1,18 +1,29 @@
 
+from random import randint
 import re
 
 
-data = open("out/172.18.119.34.conf","r").read()
+data = open("test.conf", "r").read()
 
-regex  = re.compile("(.+)->.+",re.MULTILINE)
 
-host_name = re.findall(regex, data)
-if(len(host_name)>0):
-    host_name=host_name[0]
+def get_hostname(string: str) -> str:
 
-with open(f"out/{host_name}.conf","w") as  file:
-    for line in data:
-        if line == "\n":
-            continue
-        file.write(line)
+    hostname_regex = re.compile(
+        r"set (system )?host\W?name ([a-zA-Z0-9]*\S*[a-zA-Z0-9]*[^\\rn\s>])", re.MULTILINE)
+    host_name = re.findall(hostname_regex, str(string))
 
+    if host_name:
+        host_name = host_name[0][1]
+    else:
+        hostname_regex = re.compile("(.+)->.+", re.MULTILINE)
+        host_name = re.findall(hostname_regex, string)
+        if host_name:
+            host_name = host_name[0][0]
+        else:
+            host_name = f"NA_{randint(1,1000)}_"
+
+    return host_name.replace(".", "").replace("\\r", "").replace("\\", "")
+
+
+hostname = get_hostname(data)
+print(hostname)

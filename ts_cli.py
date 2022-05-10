@@ -9,7 +9,6 @@ def start():
     while not exit:
         start_cli()
         # start_cli(protocol="SSH", ping=True, source_ip=True)
-    input("Press  Enter  to exit\n")
     return
 
 
@@ -70,6 +69,8 @@ def start_cli(**kwargs):
                     "input start ip like 192.168.1.1\n\n")
                 stop_ip = input(
                     "input stop ip like 192.168.255.255\n\n")
+                if stop_ip == '':
+                    stop_ip = source_ip
     clearConsole()
     input(
         f"\tprotocol = {protocol}\n\tping = {ping}\n\tsource_ip = {source_ip}\n\tstop_ip = {stop_ip} \n\n press Enter to start \n")
