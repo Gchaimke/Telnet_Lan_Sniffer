@@ -16,9 +16,9 @@ def get_hostname(string: str) -> str:
         host_name = host_name[0][1]
     else:
         hostname_regex = re.compile("(.+)->.+", re.MULTILINE)
-        host_name = re.findall(hostname_regex, string)
+        host_name = re.findall(hostname_regex, str(string))
         if host_name:
-            host_name = host_name[0][0]
+            host_name = host_name[0]
         else:
             host_name = f"NA_{randint(1,1000)}_"
 
